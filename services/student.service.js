@@ -1,65 +1,91 @@
 const Student = require("../models/student.model");
-const generateId = require("../utils/generateId");
 const ApiError = require("../utils/ApiError");
 
-let students = []; // In-memory storage
-
 class StudentService {
-  create(data) {
-    const errors = Student.validate(data);
-    if (errors.length) {
-      throw new ApiError(400, errors.join(", "));
+  async create(data) {
+    try {
+      const student = await Student.create(data);
+      return student;
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        const errors = Object.values(error.errors).map(err => err.message);
+        throw new ApiError(400, errors.join(', '));
+      }
+      throw new ApiError(500, 'Database error');
     }
-
-    const student = new Student({
-      id: generateId(),
-      ...data,
-      createdAt: new Date(),
-    });
-
-    students.push(student);
-    return student;
   }
 
-  getAll({ page = 1, limit = 5, search = "" }) {
-    let filtered = students;
+  async getAll({ page = 1, limit = 5, search = "" }) {
+    try {
+      const query = search ? { name: { $regex: search, $options: 'i' } } : {};
 
-    if (search) {
-      filtered = filtered.filter(s =>
-        s.name.toLowerCase().includes(search.toLowerCase())
-      );
+      const total = await Student.countDocuments(query);
+      const students = await Student.find(query)
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit);
+
+      return {
+        total,
+        page,
+        limit,
+        data: students,
+      };
+    } catch (error) {
+      throw new ApiError(500, 'Database error');
     }
-
-    const start = (page - 1) * limit;
-    const paginated = filtered.slice(start, start + limit);
-
-    return {
-      total: filtered.length,
-      page,
-      limit,
-      data: paginated,
-    };
   }
 
-  getById(id) {
-    const student = students.find(s => s.id === id);
-    if (!student) throw new ApiError(404, "Student not found");
-    return student;
+  async getById(id) {
+    try {
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        throw new ApiError(400, 'Invalid student ID');
+      }
+
+      const student = await Student.findById(id);
+      if (!student) throw new ApiError(404, "Student not found");
+      return student;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(500, 'Database error');
+    }
   }
 
-  update(id, data) {
-    const student = this.getById(id);
+  async update(id, data) {
+    try {
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        throw new ApiError(400, 'Invalid student ID');
+      }
 
-    Object.assign(student, data);
-    return student;
+      const student = await Student.findByIdAndUpdate(id, data, {
+        new: true,
+        runValidators: true,
+      });
+      if (!student) throw new ApiError(404, "Student not found");
+      return student;
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        const errors = Object.values(error.errors).map(err => err.message);
+        throw new ApiError(400, errors.join(', '));
+      }
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(500, 'Database error');
+    }
   }
 
-  delete(id) {
-    const index = students.findIndex(s => s.id === id);
-    if (index === -1) throw new ApiError(404, "Student not found");
+  async delete(id) {
+    try {
+      if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        throw new ApiError(400, 'Invalid student ID');
+      }
 
-    students.splice(index, 1);
-    return { message: "Deleted successfully" };
+      const student = await Student.findByIdAndDelete(id);
+      if (!student) throw new ApiError(404, "Student not found");
+      return { message: "Deleted successfully" };
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(500, 'Database error');
+    }
   }
 }
 

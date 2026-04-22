@@ -1,29 +1,25 @@
-class Student {
-  constructor({ id, name, age, course, createdAt }) {
-    this.id = id;
-    this.name = name;
-    this.age = age;
-    this.course = course;
-    this.createdAt = createdAt;
-  }
+const mongoose = require('mongoose');
 
-  static validate(data) {
-    const errors = [];
+const studentSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, 'Name is required'],
+    trim: true,
+  },
+  age: {
+    type: Number,
+    required: [true, 'Age is required'],
+    min: [1, 'Age must be positive'],
+  },
+  course: {
+    type: String,
+    required: [true, 'Course is required'],
+    trim: true,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
 
-    if (!data.name || typeof data.name !== "string") {
-      errors.push("Name is required and must be a string");
-    }
-
-    if (!data.age || typeof data.age !== "number") {
-      errors.push("Age must be a number");
-    }
-
-    if (!data.course || typeof data.course !== "string") {
-      errors.push("Course is required");
-    }
-
-    return errors;
-  }
-}
-
-module.exports = Student;
+module.exports = mongoose.model('Student', studentSchema);
