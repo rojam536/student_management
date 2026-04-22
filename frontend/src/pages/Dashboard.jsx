@@ -11,6 +11,7 @@ import { studentService } from '../services/studentService';
 const Dashboard = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
 
@@ -20,11 +21,14 @@ const Dashboard = () => {
 
   const fetchStudents = async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await studentService.getAllStudents();
-      setStudents(data);
+      // Ensure we are setting an array even if API returns nested object
+      setStudents(Array.isArray(data) ? data : (data.students || []));
     } catch (err) {
       console.error('Failed to fetch students:', err);
+      setError('Could not connect to the server. Please ensure the backend is running.');
     } finally {
       setLoading(false);
     }
@@ -33,10 +37,14 @@ const Dashboard = () => {
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this student?')) {
       try {
+        // Optimistic UI Update: Filter locally first for instant feedback
+        const previousStudents = [...students];
+        setStudents(prev => prev.filter(s => s._id !== id && s.id !== id));
+        
         await studentService.deleteStudent(id);
-        setStudents(prev => prev.filter(s => s.id !== id));
       } catch (err) {
-        alert('Failed to delete student');
+        alert('Failed to delete student. Reverting changes.');
+        fetchStudents(); // Refetch to sync state
       }
     }
   };
@@ -46,14 +54,14 @@ const Dashboard = () => {
   };
 
   const filteredStudents = students.filter(student => 
-    student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    student.course.toLowerCase().includes(searchTerm.toLowerCase())
+    (student.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (student.course?.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const stats = [
     { label: 'Total Students', value: students.length, icon: <Users size={20} />, color: 'bg-blue-500' },
     { label: 'Active Courses', value: new Set(students.map(s => s.course)).size, icon: <BookOpen size={20} />, color: 'bg-purple-500' },
-    { label: 'Avg. Age', value: students.length ? (students.reduce((acc, s) => acc + Number(s.age), 0) / students.length).toFixed(1) : 0, icon: <Clock size={20} />, color: 'bg-amber-500' },
+    { label: 'Avg. Age', value: students.length ? (students.reduce((acc, s) => acc + (Number(s.age) || 0), 0) / students.length).toFixed(1) : 0, icon: <Clock size={20} />, color: 'bg-amber-500' },
   ];
 
   return (
@@ -80,38 +88,53 @@ const Dashboard = () => {
           </Button>
         </div>
 
+        {/* Error State */}
+        {error && (
+          <div className="mb-8 bg-red-50 border border-red-100 p-6 rounded-[2rem] flex flex-col items-center text-center">
+            <AlertCircle className="text-red-500 mb-2" size={32} />
+            <p className="text-red-800 font-bold mb-4">{error}</p>
+            <Button variant="secondary" onClick={fetchStudents} className="bg-red-100 text-red-600 border-none">
+              Retry Connection
+            </Button>
+          </div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
-          {stats.map((stat, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
-              <div className={`${stat.color} p-3 rounded-xl text-white shadow-lg shadow-gray-100`}>
-                {stat.icon}
+        {!error && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-10">
+            {stats.map((stat, idx) => (
+              <div key={idx} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center space-x-4">
+                <div className={`${stat.color} p-3 rounded-xl text-white shadow-lg shadow-gray-100`}>
+                  {stat.icon}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{stat.label}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{stat.label}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Search & Actions */}
-        <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-8 flex flex-col md:flex-row gap-2">
-          <div className="relative flex-grow">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search by name, ID, or course..."
-              className="w-full pl-12 pr-4 py-3 bg-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-gray-700 font-medium"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+        {!error && (
+          <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100 mb-8 flex flex-col md:flex-row gap-2">
+            <div className="relative flex-grow">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search by name, ID, or course..."
+                className="w-full pl-12 pr-4 py-3 bg-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-gray-700 font-medium"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center px-6 py-2 bg-gray-50 rounded-xl text-sm font-bold text-gray-500">
+              <SlidersHorizontal size={18} className="mr-3" />
+              {filteredStudents.length} Results
+            </div>
           </div>
-          <div className="flex items-center px-6 py-2 bg-gray-50 rounded-xl text-sm font-bold text-gray-500">
-            <SlidersHorizontal size={18} className="mr-3" />
-            {filteredStudents.length} Results
-          </div>
-        </div>
+        )}
 
         {/* Content Area */}
         {loading ? (
@@ -125,14 +148,14 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredStudents.map(student => (
               <StudentCard 
-                key={student.id} 
+                key={student._id || student.id} 
                 student={student} 
-                onEdit={handleEdit}
-                onDelete={handleDelete}
+                onEdit={() => handleEdit(student._id || student.id)}
+                onDelete={() => handleDelete(student._id || student.id)}
               />
             ))}
           </div>
-        ) : (
+        ) : !error && (
           <div className="bg-white rounded-[2rem] border-2 border-dashed border-gray-100 p-20 text-center shadow-sm">
             <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
               <AlertCircle size={40} className="text-gray-300" />

@@ -1,62 +1,91 @@
-// Simulated mock data
-let students = [
-  { id: 1, name: 'John Doe', age: 20, course: 'Computer Science' },
-  { id: 2, name: 'Jane Smith', age: 22, course: 'Mathematics' },
-  { id: 3, name: 'Alice Johnson', age: 21, course: 'Physics' },
-];
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 /**
  * studentService.js
  * 
- * WHY THIS FILE?
- * 1. Abstraction: The components don't need to know WHERE the data comes from (mock or real API).
- * 2. Maintainability: When we switch to a real backend, we only change code in this file.
- * 3. Reusability: Multiple components can use these same data-fetching functions.
+ * INTEGRATION LAYER:
+ * Now using the real 'fetch' API to connect to the Node.js backend.
+ * Uses async/await and includes comprehensive error handling.
  */
 
-// Simulate API delay
-const delay = (ms = 500) => new Promise(resolve => setTimeout(resolve, ms));
+const handleResponse = async (response) => {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Request failed with status ${response.status}`);
+  }
+  return response.json();
+};
 
 export const studentService = {
   // GET all students
   async getAllStudents() {
-    await delay();
-    // Use spread to return a new array (immutability principle)
-    return [...students];
+    try {
+      const response = await fetch(`${API_BASE_URL}/students`);
+      return await handleResponse(response);
+    } catch (error) {
+      console.error('API Error (getAllStudents):', error);
+      throw error;
+    }
   },
 
   // GET student by ID
   async getStudentById(id) {
-    await delay();
-    return students.find(s => s.id === parseInt(id));
+    try {
+      const response = await fetch(`${API_BASE_URL}/students/${id}`);
+      return await handleResponse(response);
+    } catch (error) {
+      console.error(`API Error (getStudentById ${id}):`, error);
+      throw error;
+    }
   },
 
   // POST (Create) new student
   async createStudent(studentData) {
-    await delay();
-    const newStudent = {
-      ...studentData,
-      id: students.length > 0 ? Math.max(...students.map(s => s.id)) + 1 : 1
-    };
-    students.push(newStudent);
-    return newStudent;
+    try {
+      const response = await fetch(`${API_BASE_URL}/students`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(studentData),
+      });
+      return await handleResponse(response);
+    } catch (error) {
+      console.error('API Error (createStudent):', error);
+      throw error;
+    }
   },
 
   // PUT (Update) existing student
   async updateStudent(id, studentData) {
-    await delay();
-    const index = students.findIndex(s => s.id === parseInt(id));
-    if (index !== -1) {
-      students[index] = { ...students[index], ...studentData };
-      return students[index];
+    try {
+      const response = await fetch(`${API_BASE_URL}/students/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(studentData),
+      });
+      return await handleResponse(response);
+    } catch (error) {
+      console.error(`API Error (updateStudent ${id}):`, error);
+      throw error;
     }
-    throw new Error('Student not found');
   },
 
   // DELETE student
   async deleteStudent(id) {
-    await delay();
-    students = students.filter(s => s.id !== parseInt(id));
-    return true;
+    try {
+      const response = await fetch(`${API_BASE_URL}/students/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error('Failed to delete student');
+      }
+      return true;
+    } catch (error) {
+      console.error(`API Error (deleteStudent ${id}):`, error);
+      throw error;
+    }
   }
 };
